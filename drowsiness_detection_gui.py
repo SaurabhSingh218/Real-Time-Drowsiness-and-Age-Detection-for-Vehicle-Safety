@@ -10,7 +10,7 @@ import threading
 from queue import Queue
 import time
 import math
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog, QMessageBox
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
 
@@ -77,7 +77,6 @@ class FrameProcessor(threading.Thread):
                 if frame is None:
                     break
                 processed_frame = self.process_frame(frame)
-
                 while not self.output_queue.empty():
                     try:
                         self.output_queue.get_nowait()
@@ -93,8 +92,8 @@ class FrameProcessor(threading.Thread):
     def process_frame(self, frame):
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         boxes, probs = self.face_detector.detect(rgb_frame)
-
         current_time = time.time()
+        sleeping_ages = []
 
         if boxes is not None and probs is not None:
             for box, prob in zip(boxes, probs):
@@ -114,7 +113,6 @@ class FrameProcessor(threading.Thread):
                 if matched_id is None:
                     matched_id = self.face_id_counter
                     self.face_id_counter += 1
-
                     face_crop = rgb_frame[int(y1):int(y2), int(x1):int(x2)]
                     if face_crop.size > 0:
                         face_img = Image.fromarray(face_crop)
@@ -123,9 +121,7 @@ class FrameProcessor(threading.Thread):
                             age = self.age_model(face_tensor).item()
                     else:
                         age = -1
-
                     self.face_cache[matched_id] = {"box": new_box, "age": age}
-
                 else:
                     age = self.face_cache[matched_id]["age"]
 
@@ -133,7 +129,6 @@ class FrameProcessor(threading.Thread):
                 self.face_cache[matched_id]["updated"] = current_time
 
                 x, y, w, h = int(x1), int(y1), int(x2 - x1), int(y2 - y1)
-
                 eye_x = x + w // 4
                 eye_y = y + h // 3
                 eye_size = max(20, h // 6)
@@ -144,11 +139,9 @@ class FrameProcessor(threading.Thread):
                 ]
 
                 sleeping = False
-
                 if eye_region.size > 0:
                     eye_img = Image.fromarray(eye_region)
                     eye_tensor = self.transform(eye_img).unsqueeze(0).to(self.device)
-
                     with torch.no_grad():
                         eye_output = self.eye_model(eye_tensor)
                         eye_pred = torch.argmax(eye_output, dim=1).item()
@@ -157,13 +150,12 @@ class FrameProcessor(threading.Thread):
 
                 if sleeping:
                     cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
-                    cv2.putText(frame, "Sleeping", (x, y + h + 30),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+                    cv2.putText(frame, "Sleeping", (x, y + h + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+                    sleeping_ages.append(int(age))
                 else:
                     cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-                cv2.putText(frame, f"Age: {int(age)}", (x, y - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+                cv2.putText(frame, f"Age: {int(age)}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
 
         stale_ids = []
         for fid, data in self.face_cache.items():
@@ -172,7 +164,7 @@ class FrameProcessor(threading.Thread):
         for fid in stale_ids:
             del self.face_cache[fid]
 
-        return frame
+        return frame, sleeping_ages
 
 
 class DrowsinessDetectionGUI(QMainWindow):
@@ -183,12 +175,7 @@ class DrowsinessDetectionGUI(QMainWindow):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.face_detector = MTCNN(
-            keep_all=True,
-            device=self.device,
-            thresholds=[0.8, 0.9, 0.9],
-            min_face_size=40
-        )
+        self.face_detector = MTCNN(keep_all=True, device=self.device, thresholds=[0.8, 0.9, 0.9], min_face_size=40)
 
         self.age_model, _ = create_resnet50_model()
         self.age_model.load_state_dict(torch.load("best_model.pth", map_location=self.device))
@@ -203,10 +190,7 @@ class DrowsinessDetectionGUI(QMainWindow):
         self.transform = torchvision.transforms.Compose([
             torchvision.transforms.Resize((224, 224)),
             torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
+            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
         self.cap = None
@@ -273,8 +257,20 @@ class DrowsinessDetectionGUI(QMainWindow):
             self.input_queue.put(frame)
 
             if not self.output_queue.empty():
-                processed_frame = self.output_queue.get()
-                self.display_frame(processed_frame)
+                out = self.output_queue.get()
+                if isinstance(out, tuple):
+                    frame, sleeping_ages = out
+                else:
+                    frame, sleeping_ages = out, []
+
+                self.display_frame(frame)
+
+                if sleeping_ages:
+                    msg = QMessageBox()
+                    msg.setIcon(QMessageBox.Warning)
+                    msg.setWindowTitle("Drowsiness Alert")
+                    msg.setText(f"Sleeping: {len(sleeping_ages)}\nAges: {', '.join(map(str, sleeping_ages))}")
+                    msg.exec_()
         else:
             self.stop()
 
@@ -294,8 +290,7 @@ class DrowsinessDetectionGUI(QMainWindow):
             self.update_button_states(True)
 
     def open_video(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, "Open Video File",
-                                                   "", "Video Files (*.mp4 *.avi *.mov)")
+        file_name, _ = QFileDialog.getOpenFileName(self, "Open Video File", "", "Video Files (*.mp4 *.avi *.mov)")
         if file_name:
             self.cap = cv2.VideoCapture(file_name)
             if self.cap.isOpened():
@@ -303,8 +298,7 @@ class DrowsinessDetectionGUI(QMainWindow):
                 self.update_button_states(True)
 
     def open_image(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, "Open Image File",
-                                                   "", "Image Files (*.png *.jpg *.jpeg)")
+        file_name, _ = QFileDialog.getOpenFileName(self, "Open Image File", "", "Image Files (*.png *.jpg *.jpeg)")
         if file_name:
             frame = cv2.imread(file_name)
             if frame is not None:
@@ -315,8 +309,18 @@ class DrowsinessDetectionGUI(QMainWindow):
                         break
                 self.input_queue.put(frame)
                 if not self.output_queue.empty():
-                    processed_frame = self.output_queue.get()
-                    self.display_frame(processed_frame)
+                    out = self.output_queue.get()
+                    if isinstance(out, tuple):
+                        frame, sleeping_ages = out
+                    else:
+                        frame, sleeping_ages = out, []
+                    self.display_frame(frame)
+                    if sleeping_ages:
+                        msg = QMessageBox()
+                        msg.setIcon(QMessageBox.Warning)
+                        msg.setWindowTitle("Drowsiness Alert")
+                        msg.setText(f"Sleeping: {len(sleeping_ages)}\nAges: {', '.join(map(str, sleeping_ages))}")
+                        msg.exec_()
 
     def stop(self):
         self.timer.stop()
