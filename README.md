@@ -60,7 +60,7 @@ python drowsiness_detection_gui.py
 ```
 
 2. Use the GUI buttons to:
-   - **Open Webcam**: Start real-time detection using your webcam
+   - **Open Webcam**: Start real-time detection using your webcam. Doesn't working fine as of now, require more fine tuning
    - **Open Video**: Select and process a video file
    - **Open Image**: Select and process an image file
    - **Stop**: Stop the current detection session
