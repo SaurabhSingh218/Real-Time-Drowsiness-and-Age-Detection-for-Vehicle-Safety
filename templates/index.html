@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Drowsiness & Age Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Header -->
+    <header>Drowsiness & Age Detection System</header>
+
+    <!-- Streaming -->
+    <div class="video-container">
+        <img id="videoFeed" src="" alt="Video Feed">
+        <div id="exitScreen" class="overlay">Stream Stopped</div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="buttons">
+        <button id="webcamBtn">Open Webcam</button>
+
+        <button onclick="document.getElementById('videoInput').click()">Upload Video</button>
+        <input type="file" id="videoInput" accept="video/*" style="display:none">
+
+        <button onclick="document.getElementById('imageInput').click()">Upload Image</button>
+        <input type="file" id="imageInput" accept="image/*" style="display:none">
+
+        <button id="exitBtn">Exit</button>
+    </div>
+
+    <!-- Footer -->
+    <footer>© 2025 Drowsiness & Age Detection. All Rights Reserved.</footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Drowsiness & Age Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Header -->
+    <header>Drowsiness & Age Detection System</header>
+
+    <!-- Streaming -->
+    <div class="video-container">
+        <img id="videoFeed" src="" alt="Video Feed">
+        <div id="exitScreen" class="overlay">Stream Stopped</div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="buttons">
+        <button id="webcamBtn">Open Webcam</button>
+
+        <button onclick="document.getElementById('videoInput').click()">Upload Video</button>
+        <input type="file" id="videoInput" accept="video/*" style="display:none">
+
+        <button onclick="document.getElementById('imageInput').click()">Upload Image</button>
+        <input type="file" id="imageInput" accept="image/*" style="display:none">
+
+        <button id="exitBtn">Exit</button>
+    </div>
+
+    <!-- Footer -->
+    <footer>© 2025 Drowsiness & Age Detection. All Rights Reserved.</footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
