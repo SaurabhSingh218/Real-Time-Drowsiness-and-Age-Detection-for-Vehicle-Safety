@@ -9,6 +9,7 @@ import cv2
 import time
 import os
 from werkzeug.utils import secure_filename
+import requests
 
 app = Flask(__name__)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -16,6 +17,38 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # --- FACE DETECTOR ---
 mtcnn = MTCNN(keep_all=True, device=device)
 
+def download_file(url, save_path):
+    """Download a file from a URL and save it locally."""
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    
+    # Skip download if file already exists
+    if os.path.exists(save_path):
+        print(f"{save_path} already exists. Skipping download.")
+        return
+    
+    print(f"Downloading {url} ...")
+    r = requests.get(url, stream=True)
+    r.raise_for_status()  # Raise error if download fails
+    
+    with open(save_path, 'wb') as f:
+        for chunk in r.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+    print(f"Saved to {save_path}")
+
+
+# URLs of your Hugging Face model files
+age_model_url = "https://huggingface.co/spaces/officialamit558/test/resolve/main/best_model.pth"
+eye_model_url = "https://huggingface.co/spaces/officialamit558/test/resolve/main/eye_detector.pth"
+
+# Local paths to save the models
+model_dir = "models"
+age_model_path = os.path.join(model_dir, "best_model.pth")
+eye_model_path = os.path.join(model_dir, "eye_detector.pth")
+
+# Download the models
+download_file(age_model_url, age_model_path)
+download_file(eye_model_url, eye_model_path)
 # --- MODELS ---
 def create_resnet50_model():
     weights = torchvision.models.ResNet50_Weights.DEFAULT
@@ -40,11 +73,11 @@ def create_resnet18_model(seed=42):
     return model
 
 age_model = create_resnet50_model()
-age_model.load_state_dict(torch.load("best_model.pth", map_location=device))
+age_model.load_state_dict(torch.load(age_model_path , map_location=device))
 age_model.to(device).eval()
 
 eye_model = create_resnet18_model()
-eye_model.load_state_dict(torch.load("eye_detector.pth", map_location=device))
+eye_model.load_state_dict(torch.load(eye_model_path, map_location=device))
 eye_model.to(device).eval()
 
 # --- TRANSFORMS ---
